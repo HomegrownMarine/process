@@ -5,7 +5,7 @@ module.exports = function(grunt) {
     pkg: grunt.file.readJSON('package.json'),
     jshint: {
       // define the files to lint
-      files: ['gruntfile.js', 'run.js', 'src/**/*.js', 'test/**/*.js'],
+      files: ['gruntfile.js', 'run.js', 'races.js', 'src/**/*.js', 'test/**/*.js'],
       // configure JSHint (documented at http://www.jshint.com/docs/)
       options: {
         // more options here if you want to override JSHint defaults
@@ -37,5 +37,5 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-mocha-test');
 
   // Default task(s).
-  grunt.registerTask('test', ['jshint', 'mochaTest']);
+  grunt.registerTask('default', ['jshint', 'mochaTest']);
 };
