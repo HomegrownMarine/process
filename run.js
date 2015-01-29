@@ -7,6 +7,7 @@
 var path = require('path');
 var fs = require('fs');
 var JSONStream = require('JSONStream');
+var CombinedStream = require('combined-stream');
 var es = require('event-stream');
 
 var winston = require('winston');
@@ -92,6 +93,7 @@ function filesForTimeRange(startTime, endTime) {
 }
 
 
+
 function processRace(race, callback) {
     console.info("processing ", race.id);
 
@@ -100,42 +102,44 @@ function processRace(race, callback) {
     var endTime = moment(race.date+' '+race.endTime, "YYYYMMDD HH:mm");
 
     var files = filesForTimeRange(startTime, endTime);
-    var target = fs.createWriteStream('races/'+race.id+'.js');
+
+    var cs = CombinedStream.create();
+    var target = fs.createWriteStream('data/races/'+race.id+'.js');
 
     //if the jsonStringifier isn't ended, it will write multiple copies of whatever 
     //is piped into it.  Instead, set 'close' to empty, then add my own close at the
     //end of all writing.
-    var jsonStringifier = JSONStream.stringify('[\n', sep=',\n', close='');
-
-    async.eachSeries( files, function(file, callback) {
+    var jsonStringifier = JSONStream.stringify('[\n', sep=',\n', close=']');
+    
+    _.each(files, function(file) {
         var source = fs.createReadStream('/race/data/raw/' + file);
-        source
+        cs.append(source);
+    });
+
+    cs
             .pipe(es.split('\r\n'))
             .pipe(es.mapSync(nmeaCollector(startTime)))
             .pipe(es.mapSync(nmeaTimeFilter(beginTime, endTime)))
             .pipe(jsonStringifier)
-            .pipe(target, {end: false}); 
+            .pipe(target); 
 
-        source.once('end', function() {
-            callback();
-        }); 
-    }, function() {
-        target.end('\n];\n');
-        if ( typeof callback == "function" ) callback();
+    cs.on('end', function() {
+        if( typeof callback == 'function')
+        callback();
     });
 }
 
-var fileContents = fs.readFileSync('races.js', 'utf8'); 
+var fileContents = fs.readFileSync('data/races.js', 'utf8'); 
 var races = JSON.parse(fileContents);
+
+console.info(races.length)
 
 if ( id ) {
     var race = _.find(races, function(r) { return r.id == id; });
     processRace(race);    
 }
 else {
-    var processRaces = _(races)
-        .filter(function(r) { return r.boat == "Project Mayhem"; })
-        .valueOf();
+    var processRaces = _.filter(races, function(r) { return r.boat == "Project Mayhem"; });
 
     async.eachSeries(processRaces, function(race, callback) {
         processRace(race, callback);

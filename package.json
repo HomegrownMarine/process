@@ -15,7 +15,8 @@
     "async": "0.9.0",
     "commander": "^2.6.0",
     "JSONStream": "^0.10.0",
-    "event-stream": "^3.2.1"
+    "event-stream": "^3.2.1",
+    "combined-stream": "0.0.7"
   },
   "devDependencies": {
     "mocha": "*",
