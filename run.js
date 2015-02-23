@@ -36,7 +36,7 @@ var id = program.args[0];
 // -- filter by time
 // -- write as json
 
-function nmeaCollector(startTime) {
+function nmeaCollector(oneHz) {
     // this will return a function to collect nmea messages into
     // time keyed states.  Will return undef for messages that
     // don't generate a state
@@ -48,10 +48,10 @@ function nmeaCollector(startTime) {
 
         var returnValue;
 
-        //if this is a new second, to control at 1Hz
-        if (data.time && data.time.milliseconds() == 200) {
-
-            data.t = data.time.diff(startTime) / 1000;
+        
+        if (data.time && 
+            //if this is a new second, to control at 1Hz
+            (!oneHz || data.time.milliseconds() == 200) ) {
 
             returnValue = now;
             delete returnValue.msg;
@@ -59,7 +59,6 @@ function nmeaCollector(startTime) {
             delete returnValue.variation;
             delete returnValue.latStr;
             delete returnValue.lonStr;
-            // delete returnValue.time;
 
             now = {};
         }
@@ -79,6 +78,13 @@ function nmeaTimeFilter(startTime, endTime) {
     };
 }
 
+function offsetTimeAppender(referenceTime) {
+    return function(sample) {
+        sample.t = sample.time.diff(referenceTime) / 1000;
+        return sample;
+    };
+}
+
 function filesForTimeRange(startTime, endTime) {
     var files = [];
     var hour = moment(startTime);
@@ -92,59 +98,104 @@ function filesForTimeRange(startTime, endTime) {
     return files;
 }
 
+function getNMEAStream(beginTime, endTime) {
+    //assumes files are returned in order
+    var files = filesForTimeRange(beginTime, endTime);
+    
+    var cs = CombinedStream.create();
+    _.each(files, function(file) {
+        var source = fs.createReadStream('/race/data/raw/' + file);
+        cs.append(source);
+    });
 
+    return cs.pipe(es.split('\r\n'));
+}
+
+var buildData = require('./extend.js').buildData;
 
 function processRace(race, callback) {
     console.info("processing ", race.id);
 
     var startTime = moment(race.date+' '+race.startTime, "YYYYMMDD HH:mm");
+    // start displaying 5 minutes before the start
     var beginTime = moment(startTime).subtract(5, 'minutes');
     var endTime = moment(race.date+' '+race.endTime, "YYYYMMDD HH:mm");
 
-    var files = filesForTimeRange(startTime, endTime);
-
-    var cs = CombinedStream.create();
     var target = fs.createWriteStream('data/races/'+race.id+'.js');
 
     //if the jsonStringifier isn't ended, it will write multiple copies of whatever 
     //is piped into it.  Instead, set 'close' to empty, then add my own close at the
     //end of all writing.
     var jsonStringifier = JSONStream.stringify('[\n', sep=',\n', close=']');
+
+    var raceData = [];
     
-    _.each(files, function(file) {
-        var source = fs.createReadStream('/race/data/raw/' + file);
-        cs.append(source);
-    });
+    var nmeaStream = getNMEAStream(beginTime, endTime);
 
-    cs
-            .pipe(es.split('\r\n'))
-            .pipe(es.mapSync(nmeaCollector(startTime)))
-            .pipe(es.mapSync(nmeaTimeFilter(beginTime, endTime)))
-            .pipe(jsonStringifier)
-            .pipe(target); 
+    nmeaStream
+        .pipe(es.mapSync(nmeaCollector(true)))
+        .pipe(es.mapSync(nmeaTimeFilter(beginTime, endTime)))
+        .pipe(es.mapSync(offsetTimeAppender(startTime)))
+        .pipe(jsonStringifier)
+        .pipe(target);
 
-    cs.on('end', function() {
-        if( typeof callback == 'function')
-        callback();
+    nmeaStream.on('end', function() {
+        if( typeof callback == 'function') callback();
     });
 }
 
-var fileContents = fs.readFileSync('data/races.js', 'utf8'); 
-var races = JSON.parse(fileContents);
+function processRace2(race, callback) {
 
-console.info(races.length)
+    var startTime = moment(race.date+' '+race.startTime, "YYYYMMDD HH:mm");
+    // start displaying 5 minutes before the start
+    var beginTime = moment(startTime).subtract(5, 'minutes');
+    var endTime = moment(race.date+' '+race.endTime, "YYYYMMDD HH:mm");
+
+    var nmeaStream = getNMEAStream(beginTime, endTime);
+        
+    nmeaStream
+        .pipe(es.mapSync(nmeaCollector(false)))
+        .pipe(es.mapSync(nmeaTimeFilter(beginTime, endTime)))
+        .pipe(es.mapSync(offsetTimeAppender(startTime)))
+        .pipe(es.writeArray(function (err, data){
+            race.data = raceData;
+            buildData(race);
+
+            tacks = _.filter(tacks, function(tack) {
+                return tack.race_id != race.id;
+            });
+
+            var ltacks = _.map(race.tacks, function(tack) { tack.race_id = race.id; return tack; });
+            tacks = tacks.concat( ltacks );  
+
+            if( typeof callback == 'function') callback();
+        })); 
+
+}
+
+var fileContents = fs.readFileSync('data/races.js'); 
+var races = JSON.parse(fileContents);
+var tacks = JSON.parse(fs.readFileSync('data/tacks.js')); 
+
+function writeTacks() {
+    console.info('writing tacks', tacks);
+
+    fs.writeFileSync( 'data/tacks.js', JSON.stringify(tacks, null, 4) );
+}
 
 if ( id ) {
     var race = _.find(races, function(r) { return r.id == id; });
-    processRace(race);    
+    processRace(race, function() { writeTacks(); });
 }
 else {
     var processRaces = _.filter(races, function(r) { return r.boat == "Project Mayhem"; });
 
     async.eachSeries(processRaces, function(race, callback) {
         processRace(race, callback);
-    });
+    }, function() { writeTacks(); });
 }
+
+
 
 
 
