@@ -32,6 +32,15 @@ function buildData(race) {
         delayedInputs(calcs.drift),
         delayedInputs(calcs.vmg),
 
+        function abses(args) {
+            if ('awa' in args) {
+                args.aawa = Math.abs(args.awa);
+            }
+            if ('twa' in args) {
+                args.atwa = Math.abs(args.twa);
+            }
+        },
+
         derivitive('acceleration', 'speed', (NM_TO_FT / 3600)),
         derivitive('rot', 'hdg')
     ];

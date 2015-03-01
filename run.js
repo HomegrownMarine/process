@@ -157,16 +157,22 @@ function processRace2(race, callback) {
         .pipe(es.mapSync(nmeaCollector(false)))
         .pipe(es.mapSync(nmeaTimeFilter(beginTime, endTime)))
         .pipe(es.mapSync(offsetTimeAppender(startTime)))
-        .pipe(es.writeArray(function (err, data){
-            race.data = raceData;
+        .pipe(es.writeArray(function (err, data) {
+            race.data = data;
             buildData(race);
 
             tacks = _.filter(tacks, function(tack) {
                 return tack.race_id != race.id;
             });
 
-            var ltacks = _.map(race.tacks, function(tack) { tack.race_id = race.id; return tack; });
+            var ltacks = _.map(race.tacks, function(tack) { 
+                tack.race_id = race.id; 
+                tack.data = _.map(tack.data, function(pt) { return _.pick(pt, ["lat","lon","time","awa","hdg","speed","rot","t","twa","vmg"]); });
+                return tack; 
+            });
             tacks = tacks.concat( ltacks );  
+
+            console.info(race.id, ltacks.length);
 
             if( typeof callback == 'function') callback();
         })); 
@@ -175,23 +181,27 @@ function processRace2(race, callback) {
 
 var fileContents = fs.readFileSync('data/races.js'); 
 var races = JSON.parse(fileContents);
-var tacks = JSON.parse(fs.readFileSync('data/tacks.js')); 
+var tacks = []; //JSON.parse(fs.readFileSync('data/tacks.js')); 
 
 function writeTacks() {
-    console.info('writing tacks', tacks);
+    // console.info('writing tacks', tacks);
 
-    fs.writeFileSync( 'data/tacks.js', JSON.stringify(tacks, null, 4) );
+    fs.writeFileSync( 'data/tacks_1h.js', JSON.stringify(tacks, null, 4) );
 }
 
 if ( id ) {
     var race = _.find(races, function(r) { return r.id == id; });
-    processRace(race, function() { writeTacks(); });
+    processRace(race, function() {  });
 }
 else {
-    var processRaces = _.filter(races, function(r) { return r.boat == "Project Mayhem"; });
+    var processRaces = _.filter(races, function(r) { return r.boat == "Project Mayhem" && r.id.slice(0,8) == "2014_nas"; });
 
     async.eachSeries(processRaces, function(race, callback) {
-        processRace(race, callback);
+        async.parallel([
+            function(c) { processRace(race, c); },
+            function(c) { processRace2(race, c); }
+        ], function() { callback(); });
+        
     }, function() { writeTacks(); });
 }
 
