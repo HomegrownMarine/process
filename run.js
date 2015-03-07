@@ -167,7 +167,9 @@ function processRace2(race, callback) {
 
             var ltacks = _.map(race.tacks, function(tack) { 
                 tack.race_id = race.id; 
-                tack.data = _.map(tack.data, function(pt) { return _.pick(pt, ["lat","lon","time","awa","hdg","speed","rot","t","twa","vmg"]); });
+                tack.data = _.map(tack.data, function(pt) { return _.pick(pt, ["aawa","hdg","speed","t","atwa","vmg"]); });
+                tack.track = _.map(tack.track, function(pt) { return _.pick(pt, ["lat","lon","hdg","t"]); });
+                
                 return tack; 
             });
             tacks = tacks.concat( ltacks );  
@@ -194,7 +196,7 @@ if ( id ) {
     processRace(race, function() {  });
 }
 else {
-    var processRaces = _.filter(races, function(r) { return r.boat == "Project Mayhem" && r.id.slice(0,8) == "2014_nas"; });
+    var processRaces = _.filter(races, function(r) { return r.boat == "Project Mayhem" && r.id.slice(0,8) == '2014_nas'; });
 
     async.eachSeries(processRaces, function(race, callback) {
         async.parallel([
