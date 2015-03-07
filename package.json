@@ -1,10 +1,19 @@
 {
   "name": "Process",
-  "version": "0.0.0",
-  "description": "",
+  "version": "0.0.1",
+  "description": "Process raw NMEA logs into a json database of races, and maneuvers for later analysis",
   "main": "run.js",
-  "author": "",
-  "license": "ISC",
+  "homepage": "http://homegrownmarine.com",
+  "keywords": [
+    "performance",
+    "sailing",
+    "analysis"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HomegrownMarine/process.git"
+  },
+  "bugs": "https://github.com/HomegrownMarine/process/issues",
   "dependencies": {
     "homegrown-polars": "*",
     "homegrown-sailing": "*",
